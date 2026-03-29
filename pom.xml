@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.scanner</groupId>
+    <artifactId>scanner-bridge</artifactId>
+    <version>1.0.0</version>
+    <name>scanner-bridge</name>
+    <description>Local scanner bridge service — exposes WIA/TWAIN scanners to a web app over WebSocket</description>
+    <packaging>jar</packaging>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencies>
+
+        <!-- WebSocket support -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
+        <!-- REST + Jackson (jackson-databind included transitively) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+            JACOB (Java COM Bridge) — required for WIA scanner access on Windows.
+            JACOB is NOT published to Maven Central; the JAR must be obtained manually
+            and placed at ./lib/jacob-1.21.jar before building.
+            The native DLL (jacob-1.21-x64.dll or jacob-1.21-x86.dll for 32-bit JVMs)
+            must also be present on java.library.path at runtime — place it next to the
+            application JAR and launch with:
+              java -Djava.library.path=. -jar scanner-bridge.jar
+            Download both the JAR and DLL from:
+              https://github.com/freemansoft/jacob-project/releases
+            See lib/README.txt for more details.
+        -->
+        <dependency>
+            <groupId>net.sf.jacob-project</groupId>
+            <artifactId>jacob</artifactId>
+            <version>1.21</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/jacob-1.21.jar</systemPath>
+        </dependency>
+
+        <!-- PDFBox — used to assemble scanned pages into a PDF -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+
+        <!-- Test scope -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <!-- Includes JUnit 5 and AssertJ; no need to add those separately -->
+        </dependency>
+
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+
+        <!-- Output JAR is always scanner-bridge.jar regardless of version -->
+        <finalName>scanner-bridge</finalName>
+
+        <plugins>
+
+            <!-- Spring Boot fat-JAR packager -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Include system-scoped JARs (e.g. JACOB) in the fat JAR -->
+                    <includeSystemScope>true</includeSystemScope>
+                </configuration>
+            </plugin>
+
+            <!--
+                Maven Dependency plugin — copies the JACOB native DLL from the
+                local lib/ directory into target/lib/ during prepare-package so
+                it is present before the Spring Boot repackage goal runs.
+
+                Place jacob-1.21-x64.dll in ./lib/ before building.
+                See lib/README.txt for download instructions.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-jacob-dll</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <!-- We use maven-resources-plugin below for the DLL;
+                             this execution is intentionally left minimal so
+                             maven-dependency-plugin is declared and active. -->
+                        <configuration>
+                            <includeScope>runtime</includeScope>
+                            <outputDirectory>${project.build.directory}/dependency</outputDirectory>
+                            <skip>true</skip>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Maven Resources plugin — copies the JACOB DLL from the local
+                lib/ folder into target/lib/ during prepare-package.
+                jpackage and the build.ps1 staging step both expect it there.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-native-dll</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                            <overwrite>true</overwrite>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/lib</directory>
+                                    <includes>
+                                        <include>jacob-1.21-x64.dll</include>
+                                    </includes>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- SEC-12: OWASP Dependency vulnerability scanner -->
+            <!-- Run with: mvn dependency-check:check -->
+            <!-- Fails build if CVSS score >= 7 (HIGH severity) -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>9.0.9</version>
+                <configuration>
+                    <failBuildOnCVSS>7</failBuildOnCVSS>
+                    <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
+                    <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+                </configuration>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

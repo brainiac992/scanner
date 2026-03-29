@@ -1,0 +1,15 @@
+server:
+  port: 8765
+  tomcat:
+    websocket:
+      # Scanned images encoded as Base64 can be several MB.
+      # Capped at 10 MB (SEC-09) — reduced from 64 MB to limit DoS surface.
+      max-text-message-buffer-size: 10485760  # 10 MB
+
+scanner:
+  allowed-origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+    # TODO: Add your production domain here, e.g. https://scanner.agency.gov
+  auth:
+    token: "xbjp+9BLs1UVRcu40X/fEAMa+JBepVhGe2NoyiABos0="

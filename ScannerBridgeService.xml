@@ -1,0 +1,42 @@
+<service>
+  <id>ScannerBridge</id>
+  <name>Scanner Bridge</name>
+  <description>Local scanner bridge service. Allows the web application to communicate with the connected flatbed scanner.</description>
+
+  <!--
+    Path to the jpackage-bundled launcher inside the install directory.
+    %BASE% is the directory where ScannerBridgeService.exe lives (the install directory).
+  -->
+  <executable>%BASE%\app\Scanner Bridge.exe</executable>
+
+  <!-- Log output to a rolling file, max 10MB, keep 3 -->
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>3</keepFiles>
+  </log>
+
+  <!-- Restart the service automatically if it crashes -->
+  <onfailure action="restart" delay="5 sec"/>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="none"/>
+
+  <!-- Service starts automatically with Windows, even before any user logs in -->
+  <startmode>Automatic</startmode>
+
+  <!--
+    Run as NT AUTHORITY\LocalService (SEC-03). LocalService has minimal privileges:
+    it has access to local resources and the local network but cannot access the domain,
+    cannot read HKCU of other users, and has a reduced token compared to LocalSystem.
+    This limits the blast radius if the service is ever compromised.
+
+    SETUP INSTRUCTIONS FOR DEVELOPERS:
+      1. Download WinSW-x64.exe from https://github.com/winsw/winsw/releases
+      2. Rename it to ScannerBridgeService.exe
+      3. Place ScannerBridgeService.exe in the project root (alongside this XML)
+      4. Run build.ps1 — it will verify the file is present before building the installer
+  -->
+  <serviceaccount>
+    <username>NT AUTHORITY\LocalService</username>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+</service>

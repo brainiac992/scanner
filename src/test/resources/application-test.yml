@@ -1,0 +1,11 @@
+server:
+  port: 0  # random port for tests
+  tomcat:
+    websocket:
+      max-text-message-buffer-size: 10485760  # 10 MB (SEC-09)
+
+scanner:
+  allowed-origins:
+    - "*"
+  auth:
+    token: "test-token-not-for-production"
