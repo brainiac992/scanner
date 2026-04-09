@@ -11,3 +11,7 @@ scanner:
     - "*"
   auth:
     token: "xbjp+9BLs1UVRcu40X/fEAMa+JBepVhGe2NoyiABos0="
+  update:
+    enabled: true
+    github-repo: "brainiac992/scanner"
+    check-interval-hours: 4
