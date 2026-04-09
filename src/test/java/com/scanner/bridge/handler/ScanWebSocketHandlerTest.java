@@ -20,6 +20,7 @@ import com.scanner.bridge.model.ScanFormat;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import org.mockito.Mockito;
@@ -99,7 +100,7 @@ class ScanWebSocketHandlerTest {
 
     @Test
     void scan_withValidFormat_sendsSuccessResponse() throws Exception {
-        when(scannerService.scan()).thenReturn(new byte[]{1, 2, 3});
+        when(scannerService.scan(anyInt())).thenReturn(List.of(new byte[]{1, 2, 3}));
         // The handler calls convert(byte[], ScanFormat) and getMimeType/getFileExtension(ScanFormat).
         when(fileConverter.convert(any(byte[].class), any(ScanFormat.class))).thenReturn("PDFDATA".getBytes());
         when(fileConverter.getMimeType(any(ScanFormat.class))).thenReturn("application/pdf");
@@ -135,7 +136,7 @@ class ScanWebSocketHandlerTest {
     void scan_whenScannerThrows_sendsErrorResponse() throws Exception {
         // IllegalArgumentException messages pass through sanitizeError() verbatim; a plain
         // Exception would be replaced with a generic message (SEC-07).
-        when(scannerService.scan()).thenThrow(new IllegalArgumentException("No scanner found"));
+        when(scannerService.scan(anyInt())).thenThrow(new IllegalArgumentException("No scanner found"));
 
         send("{\"action\":\"scan\",\"format\":\"pdf\"}");
         Thread.sleep(500);
@@ -171,7 +172,7 @@ class ScanWebSocketHandlerTest {
     void scan_whenSessionClosed_doesNotThrow() throws Exception {
         // Session is closed before the async work completes.
         when(session.isOpen()).thenReturn(false);
-        when(scannerService.scan()).thenReturn(new byte[]{1, 2, 3});
+        when(scannerService.scan(anyInt())).thenReturn(List.of(new byte[]{1, 2, 3}));
         when(fileConverter.convert(any(byte[].class), any(ScanFormat.class))).thenReturn(new byte[]{1, 2, 3});
 
         send("{\"action\":\"scan\",\"format\":\"pdf\"}");

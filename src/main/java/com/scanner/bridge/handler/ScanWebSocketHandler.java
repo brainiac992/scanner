@@ -179,43 +179,58 @@ public class ScanWebSocketHandler extends TextWebSocketHandler {
         sessionCount.incrementAndGet();
         globalScanCount.incrementAndGet();
 
-        log.info("Scan requested — format: {}, session: {}", scanFormat.get().getKey(), session.getId());
+        int maxPages = root.path("maxPages").asInt(0);
+
+        log.info("Scan requested — format: {}, maxPages: {}, session: {}", scanFormat.get().getKey(), maxPages, session.getId());
 
         // Offload the blocking scan+convert work to the dedicated scan thread pool.
         CompletableFuture.runAsync(() -> {
             try {
-                // 1. Acquire raw BMP bytes from the scanner.
-                byte[] rawBytes = scannerService.scan();
+                // 1. Acquire raw BMP pages from the scanner (one element per page).
+                List<byte[]> pages = scannerService.scan(maxPages);
 
-                // 2. Convert to the requested format.
-                byte[] convertedBytes = fileConverter.convert(rawBytes, scanFormat.get());
-
-                // 3. Encode as Base64 for transport over the WebSocket text channel.
-                String base64Data = Base64.getEncoder().encodeToString(convertedBytes);
-
-                // 4. Collect metadata.
+                // 2. Collect shared metadata.
                 String mimeType = fileConverter.getMimeType(scanFormat.get());
                 String extension = fileConverter.getFileExtension(scanFormat.get());
                 String datestamp = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-                String filename = "scan_" + datestamp + "_" + System.currentTimeMillis() + "." + extension;
+                long timestamp = System.currentTimeMillis();
+                int totalPages = pages.size();
 
-                log.info("Scan complete — filename: {}, size: {} bytes (Base64: {} chars)",
-                        filename, convertedBytes.length, base64Data.length());
+                log.info("Scan complete — {} page(s), format: {}", totalPages, scanFormat.get().getKey());
 
-                // 5. Guard against the client disconnecting while the scan was running.
-                if (!session.isOpen()) {
-                    log.warn("Session {} closed before scan result could be sent", session.getId());
-                    return;
+                // 3. Send each page as a separate WebSocket message.
+                for (int i = 0; i < totalPages; i++) {
+                    // Guard against the client disconnecting between pages.
+                    if (!session.isOpen()) {
+                        log.warn("Session {} closed before page {}/{} could be sent",
+                                session.getId(), i + 1, totalPages);
+                        return;
+                    }
+
+                    // Convert to the requested format.
+                    byte[] convertedBytes = fileConverter.convert(pages.get(i), scanFormat.get());
+
+                    // Encode as Base64 for transport over the WebSocket text channel.
+                    String base64Data = Base64.getEncoder().encodeToString(convertedBytes);
+
+                    // Build filename — include _page{N} suffix when scanning multiple pages.
+                    String filename = totalPages > 1
+                            ? "scan_" + datestamp + "_" + timestamp + "_page" + (i + 1) + "." + extension
+                            : "scan_" + datestamp + "_" + timestamp + "." + extension;
+
+                    log.info("Sending page {}/{} — filename: {}, size: {} bytes (Base64: {} chars)",
+                            i + 1, totalPages, filename, convertedBytes.length, base64Data.length());
+
+                    sendJson(session, Map.of(
+                            "status", "success",
+                            "pageIndex", i + 1,
+                            "totalPages", totalPages,
+                            "format", scanFormat.get().getKey(),
+                            "mimeType", mimeType,
+                            "filename", filename,
+                            "data", base64Data
+                    ));
                 }
-
-                // 6. Send success response.
-                sendJson(session, Map.of(
-                        "status", "success",
-                        "format", scanFormat.get().getKey(),
-                        "mimeType", mimeType,
-                        "filename", filename,
-                        "data", base64Data
-                ));
 
             } catch (Exception ex) {
                 log.error("Scan failed on session {}: {}", session.getId(), ex.getMessage(), ex);
@@ -231,7 +246,7 @@ public class ScanWebSocketHandler extends TextWebSocketHandler {
                             session.getId(), ioEx.getMessage(), ioEx);
                 }
             } finally {
-                // SEC-02: always release the rate-limit counters
+                // SEC-02: always release the rate-limit counters (once, after all pages)
                 if (sessionCount != null) sessionCount.decrementAndGet();
                 globalScanCount.decrementAndGet();
             }

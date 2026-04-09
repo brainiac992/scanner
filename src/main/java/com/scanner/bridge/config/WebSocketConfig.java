@@ -50,10 +50,14 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         String[] origins = scannerProperties.getAllowedOrigins().toArray(String[]::new);
-        registry.addHandler(scanWebSocketHandler, "/scanner")
-                // Strict origin list — no wildcard (SEC-04)
-                .setAllowedOrigins(origins)
-                .addInterceptors(authInterceptor(), privateNetworkHandshakeInterceptor());
+        boolean isWildcard = origins.length == 1 && "*".equals(origins[0]);
+        var handler = registry.addHandler(scanWebSocketHandler, "/scanner");
+        if (isWildcard) {
+            handler.setAllowedOriginPatterns("*");
+        } else {
+            handler.setAllowedOrigins(origins);
+        }
+        handler.addInterceptors(authInterceptor(), privateNetworkHandshakeInterceptor());
     }
 
     /**

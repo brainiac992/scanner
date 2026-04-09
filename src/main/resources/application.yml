@@ -8,8 +8,6 @@ server:
 
 scanner:
   allowed-origins:
-    - "http://localhost:3000"
-    - "http://localhost:5173"
-    # TODO: Add your production domain here, e.g. https://scanner.agency.gov
+    - "*"
   auth:
     token: "xbjp+9BLs1UVRcu40X/fEAMa+JBepVhGe2NoyiABos0="

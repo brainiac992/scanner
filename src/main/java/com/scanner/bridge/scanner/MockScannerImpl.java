@@ -22,7 +22,7 @@ public class MockScannerImpl implements ScannerService {
     private static final Logger log = LoggerFactory.getLogger(MockScannerImpl.class);
 
     @Override
-    public byte[] scan() throws Exception {
+    public List<byte[]> scan(int maxPages) throws Exception {
         log.info("MockScanner: generating virtual scan image");
         // Generate a white A4-like image (794x1123 pixels at 96dpi) with sample text
         BufferedImage image = new BufferedImage(794, 1123, BufferedImage.TYPE_INT_RGB);
@@ -63,7 +63,7 @@ public class MockScannerImpl implements ScannerService {
         // Encode as BMP
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ImageIO.write(image, "BMP", bos);
-        return bos.toByteArray();
+        return List.of(bos.toByteArray());
     }
 
     @Override
