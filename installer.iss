@@ -1,6 +1,6 @@
 [Setup]
 AppName=Scanner Bridge
-AppVersion=1.0.0
+AppVersion=1.0
 AppPublisher=Your Organization
 DefaultDirName={autopf}\Scanner Bridge
 DefaultGroupName=Scanner Bridge

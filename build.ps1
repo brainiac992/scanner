@@ -52,7 +52,7 @@ $StageDir     = Join-Path $ProjectRoot "target\package-input"
 $StageDllDir  = Join-Path $StageDir    "lib"
 $DistDir      = Join-Path $ProjectRoot "target\dist"
 $AppName      = "Scanner Bridge"
-$AppVersion   = "1.0.0"
+$AppVersion   = "1.0"
 $MainClass    = "com.scanner.bridge.BridgeApplication"
 $IcoPath      = Join-Path $ProjectRoot "src\main\resources\tray-icon.ico"
 

@@ -14,7 +14,7 @@
 
     <groupId>com.scanner</groupId>
     <artifactId>scanner-bridge</artifactId>
-    <version>1.0.0</version>
+    <version>1.0</version>
     <name>scanner-bridge</name>
     <description>Local scanner bridge service — exposes WIA/TWAIN scanners to a web app over WebSocket</description>
     <packaging>jar</packaging>
