@@ -52,10 +52,12 @@ public class ScanWebSocketHandler extends TextWebSocketHandler {
     private static final ExecutorService SCAN_EXECUTOR = Executors.newFixedThreadPool(4);
 
     // SEC-02: per-session and global scan counters for rate limiting
-    private static final int MAX_CONCURRENT_SCANS = 1; // per session
+    private static final int MAX_CONCURRENT_SCANS = 1;   // per session
     private static final int MAX_QUEUED_SCANS_GLOBAL = 4; // system-wide (matches pool size)
+    private static final int MAX_SESSIONS = 10;           // global WebSocket connection cap (SEC-DoS)
     private static final ConcurrentHashMap<String, AtomicInteger> sessionScanCount = new ConcurrentHashMap<>();
     private static final AtomicInteger globalScanCount = new AtomicInteger(0);
+    private static final AtomicInteger activeSessions = new AtomicInteger(0);
 
     private final ScannerService scannerService;
     private final FileConverter fileConverter;
@@ -83,12 +85,19 @@ public class ScanWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        if (activeSessions.incrementAndGet() > MAX_SESSIONS) {
+            activeSessions.decrementAndGet();
+            log.warn("Connection limit reached ({}) — rejecting session {}", MAX_SESSIONS, session.getId());
+            session.close(CloseStatus.SERVICE_OVERLOAD);
+            return;
+        }
         sessionScanCount.put(session.getId(), new AtomicInteger(0)); // SEC-02
         log.info("WebSocket connection established — session id: {}", session.getId());
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+        activeSessions.decrementAndGet();
         sessionScanCount.remove(session.getId()); // SEC-02
         log.info("WebSocket connection closed — session id: {}, status: {}", session.getId(), status);
     }

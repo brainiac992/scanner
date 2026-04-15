@@ -5,10 +5,24 @@ server:
       # Scanned images encoded as Base64 can be several MB.
       # Capped at 10 MB (SEC-09) — reduced from 64 MB to limit DoS surface.
       max-text-message-buffer-size: 10485760  # 10 MB
+    # If access logging is ever enabled, replace the token query param with [REDACTED]
+    # to prevent the pre-shared secret from appearing in log files.
+    accesslog:
+      enabled: false
+      pattern: '%h %l %u %t "%m %{token=([^&]*)}{redacted}q %H" %s %b'
 
 scanner:
   allowed-origins:
-    - "*"
+    - "http://localhost:3000"
+    # Production
+    - "https://ds.sharjah.ae"
+    - "https://sp-aqari.ds.sharjah.ae"
+    # Staging
+    - "https://stg-ds.sharjah.ae"
+    - "https://stg-sp-aqari.ds.sharjah.ae"
+    # UAT
+    - "https://uat-ds.sharjah.ae"
+    - "https://uat-sp-aqari.ds.sharjah.ae"
   auth:
     token: "xbjp+9BLs1UVRcu40X/fEAMa+JBepVhGe2NoyiABos0="
   update:

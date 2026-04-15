@@ -12,6 +12,8 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.file.*;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.concurrent.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -20,7 +22,7 @@ import java.util.zip.ZipInputStream;
 public class UpdateService {
 
     private static final Logger log = LoggerFactory.getLogger(UpdateService.class);
-    private static final String CURRENT_VERSION = "1.0.0";
+    private static final String CURRENT_VERSION = "1.0";
 
     private final UpdateProperties props;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -92,16 +94,22 @@ public class UpdateService {
             }
 
             String assetUrl = null;
+            String checksumUrl = null;
             for (JsonNode asset : assets) {
                 String name = asset.get("name").asText();
                 if (name.toLowerCase().endsWith(".zip")) {
                     assetUrl = asset.get("browser_download_url").asText();
-                    break;
+                } else if (name.toLowerCase().endsWith(".zip.sha256")) {
+                    checksumUrl = asset.get("browser_download_url").asText();
                 }
             }
 
             if (assetUrl == null) {
                 log.warn("No ZIP asset found in release {}", latestVersion);
+                return;
+            }
+            if (checksumUrl == null) {
+                log.warn("No SHA-256 checksum file found for release {} — skipping update (SEC)", latestVersion);
                 return;
             }
 
@@ -113,6 +121,17 @@ public class UpdateService {
             log.info("Downloading update from {}", assetUrl);
             downloadFile(assetUrl, zipFile);
             log.info("Downloaded update ({} bytes)", Files.size(zipFile));
+
+            // Verify SHA-256 checksum before extracting (SEC)
+            String expectedChecksum = fetchChecksum(checksumUrl);
+            String actualChecksum = sha256Hex(zipFile);
+            if (!expectedChecksum.equalsIgnoreCase(actualChecksum)) {
+                log.error("Checksum mismatch for release {} — expected {} got {} — aborting update",
+                        latestVersion, expectedChecksum, actualChecksum);
+                Files.deleteIfExists(zipFile);
+                return;
+            }
+            log.info("Checksum verified OK for release {}", latestVersion);
 
             // Extract
             Path extractDir = updateDir.resolve("extracted");
@@ -297,6 +316,33 @@ public class UpdateService {
             if (n < o) return false;
         }
         return false;
+    }
+
+    /** Downloads a checksum file and returns the first hex token on the first line. */
+    private String fetchChecksum(String url) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        conn.setRequestProperty("User-Agent", "ScannerBridge/" + CURRENT_VERSION);
+        conn.setConnectTimeout(10_000);
+        conn.setReadTimeout(10_000);
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+            String line = br.readLine();
+            if (line == null) throw new IOException("Empty checksum file");
+            // Support both "abc123  file.zip" and plain "abc123" formats
+            return line.trim().split("\\s+")[0];
+        }
+    }
+
+    /** Returns the lowercase SHA-256 hex digest of a file. */
+    private String sha256Hex(Path file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream is = Files.newInputStream(file)) {
+            byte[] buf = new byte[8192];
+            int read;
+            while ((read = is.read(buf)) != -1) {
+                digest.update(buf, 0, read);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 
     private void deleteDirectory(Path dir) throws IOException {

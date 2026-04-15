@@ -13,6 +13,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
+import java.security.MessageDigest;
 import java.util.Map;
 
 /**
@@ -82,7 +83,12 @@ public class WebSocketConfig implements WebSocketConfigurer {
                 } else if (request instanceof ServletServerHttpRequest servletRequest) {
                     token = servletRequest.getServletRequest().getParameter("token");
                 }
-                if (token == null || !scannerProperties.getAuth().getToken().equals(token)) {
+                // SEC: constant-time comparison prevents timing attacks
+                boolean valid = token != null && MessageDigest.isEqual(
+                        scannerProperties.getAuth().getToken().getBytes(),
+                        token.getBytes()
+                );
+                if (!valid) {
                     response.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
                     return false;
                 }
