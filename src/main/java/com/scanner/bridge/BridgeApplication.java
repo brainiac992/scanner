@@ -3,6 +3,7 @@ package com.scanner.bridge;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import com.scanner.bridge.config.ScannerProperties;
 
 import java.io.File;
@@ -10,6 +11,7 @@ import java.nio.file.Path;
 
 @SpringBootApplication
 @EnableConfigurationProperties(ScannerProperties.class)
+@EnableScheduling
 public class BridgeApplication {
     public static void main(String[] args) {
         configureJacobLibraryPath();

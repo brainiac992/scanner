@@ -8,13 +8,16 @@ import com.scanner.bridge.model.ScanFormat;
 import com.scanner.bridge.scanner.ScannerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.PingMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
@@ -59,6 +62,9 @@ public class ScanWebSocketHandler extends TextWebSocketHandler {
     private static final AtomicInteger globalScanCount = new AtomicInteger(0);
     private static final AtomicInteger activeSessions = new AtomicInteger(0);
 
+    // Option 2: registry of live sessions for keepalive pings
+    private static final ConcurrentHashMap<String, WebSocketSession> liveSessions = new ConcurrentHashMap<>();
+
     private final ScannerService scannerService;
     private final FileConverter fileConverter;
     private final ObjectMapper objectMapper;
@@ -92,6 +98,7 @@ public class ScanWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         sessionScanCount.put(session.getId(), new AtomicInteger(0)); // SEC-02
+        liveSessions.put(session.getId(), session);                   // Option 2
         log.info("WebSocket connection established — session id: {}", session.getId());
     }
 
@@ -99,7 +106,30 @@ public class ScanWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         activeSessions.decrementAndGet();
         sessionScanCount.remove(session.getId()); // SEC-02
+        liveSessions.remove(session.getId());     // Option 2
         log.info("WebSocket connection closed — session id: {}, status: {}", session.getId(), status);
+    }
+
+    /**
+     * Option 2: sends a WebSocket ping frame to every live session every 30 seconds.
+     * Stale or dead connections fail to send and are closed + removed immediately,
+     * keeping the session registry clean and the bridge responsive.
+     */
+    @Scheduled(fixedDelay = 30_000)
+    public void pingAllSessions() {
+        liveSessions.forEach((id, session) -> {
+            if (!session.isOpen()) {
+                liveSessions.remove(id);
+                return;
+            }
+            try {
+                session.sendMessage(new PingMessage(ByteBuffer.wrap(new byte[0])));
+            } catch (IOException e) {
+                log.warn("Ping failed on session {} — closing stale connection", id);
+                liveSessions.remove(id);
+                try { session.close(CloseStatus.SESSION_NOT_RELIABLE); } catch (IOException ignored) {}
+            }
+        });
     }
 
     @Override

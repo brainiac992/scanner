@@ -246,7 +246,17 @@ public class WiaScanner implements ScannerService {
             }, "wia-sta-scan");
 
             staThread.start();
-            staThread.join();
+            // Option 3: cap the WIA thread at 55 s — slightly under the frontend's 60 s
+            // scan timeout. If WIA hangs (stale driver / sleeping scanner), this unblocks
+            // the scan executor thread so the bridge can send an error instead of hanging.
+            staThread.join(55_000);
+            if (staThread.isAlive()) {
+                staThread.interrupt();
+                log.error("WIA scan thread did not complete within 55 s — interrupted");
+                throw new IllegalStateException(
+                        "Scanner did not respond within the allowed time. " +
+                        "Ensure the scanner is powered on and not in use by another application.");
+            }
 
             if (errorHolder[0] != null) {
                 throw errorHolder[0];
